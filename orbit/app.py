@@ -4,6 +4,10 @@ import subprocess
 import cairo
 from pathlib import Path
 import threading
+# gtk4-layer-shell must interpose libwayland before GI imports GTK.
+# Import order alone is insufficient because typelib dependencies load GTK first.
+from ctypes import CDLL
+CDLL('libgtk4-layer-shell.so.0')
 import gi
 # Load layer-shell before GTK initializes the Wayland connection.
 gi.require_version('Gtk4LayerShell', '1.0')
