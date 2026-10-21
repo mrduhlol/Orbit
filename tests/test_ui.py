@@ -74,6 +74,15 @@ class UITests(unittest.TestCase):
         value = self.Gdk.FileList.new_from_array([self.Gio.File.new_for_path(str(self.path)), self.Gio.File.new_for_uri('sftp://example.com/file.png')])
         self.assertEqual(self.app.local_paths(value), [])
 
+    def test_uri_offer_is_accepted_before_actions_are_negotiated(self):
+        from types import SimpleNamespace
+        uri = self.Gdk.ContentFormats.new(['text/uri-list'])
+        text = self.Gdk.ContentFormats.new(['text/plain'])
+        self.assertTrue(self.app.accept_drop(None, SimpleNamespace(get_formats=lambda: uri)))
+        self.assertFalse(self.app.accept_drop(None, SimpleNamespace(get_formats=lambda: text)))
+        self.app.busy = True
+        self.assertFalse(self.app.accept_drop(None, SimpleNamespace(get_formats=lambda: uri)))
+
     def test_probe_accepts_offer_before_preload(self):
         self.app.gesture.phase = 'probe'
         self.app.options = []

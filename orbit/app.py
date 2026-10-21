@@ -195,6 +195,7 @@ class Orbit(Gtk.Application):
         self.window.connect('map', self.update_input_region)
         drop = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
         drop.set_preload(True)
+        drop.connect('accept', self.accept_drop)
         drop.connect('notify::value', self.preload)
         drop.connect('enter', self.drag_motion)
         drop.connect('motion', self.drag_motion)
@@ -235,6 +236,14 @@ class Orbit(Gtk.Application):
             button.connect('clicked', lambda _, index=i: self.start(index))
             self.format_row.append(button)
         self.set_message(('Choose an output format · ' + (paths[0].name if len(paths) == 1 else f'{len(paths)} files')) if self.options else 'No shared supported format. Try images, PDFs, audio, or video.')
+
+    def accept_drop(self, target, offer):
+        # GTK's default acceptance can reject cross-process URI offers before
+        # their GdkFileList deserializer is resolved. Accept the wire format;
+        # preload/drop still validate that every URI is a supported local file.
+        formats = offer.get_formats()
+        return (not self.busy and (formats.contain_mime_type('text/uri-list')
+                     or formats.contain_gtype(Gdk.FileList)))
 
     @staticmethod
     def local_paths(value):
