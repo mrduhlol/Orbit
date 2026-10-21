@@ -30,10 +30,14 @@ class Orbit(Gtk.Application):
         self.gesture_mode = False
         self.probe_point = (CENTER, CENTER)
         self.layer_supported = False
+        self.drag_serial = 0
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
         self.hold()
+        cancel = Gio.SimpleAction.new('cancel-gesture', None)
+        cancel.connect('activate', lambda *_: self.close_panel())
+        self.add_action(cancel)
         for side in ('left', 'right'):
             for state in ('down', 'up'):
                 action = Gio.SimpleAction.new(f'shift-{side}-{state}', None)
@@ -82,7 +86,7 @@ class Orbit(Gtk.Application):
         self.window.present()
         self.update_input_region()
         self.area.queue_draw()
-        GLib.timeout_add(400, self.expire_probe, self.gesture.generation)
+        GLib.timeout_add(800, self.expire_probe, self.gesture.generation)
 
     def expire_probe(self, generation):
         if generation == self.gesture.generation and self.gesture.phase == 'probe':
@@ -110,7 +114,7 @@ class Orbit(Gtk.Application):
             surface.set_input_region(None)
         elif self.gesture.phase == 'probe':
             x, y = self.probe_point
-            surface.set_input_region(cairo.Region(cairo.RectangleInt(max(0, x - 12), max(0, y - 12), 24, 24)))
+            surface.set_input_region(cairo.Region(cairo.RectangleInt(max(0, x - 32), max(0, y - 32), min(64, SIZE - max(0, x - 32)), min(64, SIZE - max(0, y - 32)))))
         else:
             region = cairo.Region()
             for y in range(15, 406):
@@ -188,9 +192,10 @@ class Orbit(Gtk.Application):
         drop = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
         drop.set_preload(True)
         drop.connect('notify::value', self.preload)
+        drop.connect('enter', self.drag_motion)
         drop.connect('motion', self.drag_motion)
         drop.connect('drop', self.dropped)
-        drop.connect('leave', lambda *_: self.motion(None, -1, -1))
+        drop.connect('leave', self.drag_leave)
         self.area.add_controller(drop)
         motion = Gtk.EventControllerMotion()
         motion.connect('motion', self.motion)
@@ -227,12 +232,18 @@ class Orbit(Gtk.Application):
             self.format_row.append(button)
         self.set_message(('Choose an output format · ' + (paths[0].name if len(paths) == 1 else f'{len(paths)} files')) if self.options else 'No shared supported format. Try images, PDFs, audio, or video.')
 
+    @staticmethod
+    def local_paths(value):
+        paths = [f.get_path() for f in value.get_files()]
+        # Never silently convert only part of a mixed local/remote selection.
+        return [Path(path) for path in paths] if paths and all(paths) else []
+
     def preload(self, drop, _):
         value = drop.get_value()
         if value and not self.busy:
             if self.gesture_mode and self.gesture.phase not in {'probe', 'visible'}:
                 return
-            paths = [Path(f.get_path()) for f in value.get_files() if f.get_path()]
+            paths = self.local_paths(value)
             if self.gesture_mode:
                 if not common_formats(paths):
                     self.close_panel()
@@ -244,7 +255,8 @@ class Orbit(Gtk.Application):
     def dropped(self, _, value, x, y):
         if self.busy:
             return False
-        paths = [Path(f.get_path()) for f in value.get_files() if f.get_path()]
+        self.drag_serial += 1
+        paths = self.local_paths(value)
         if not paths:
             return False
         if self.gesture_mode and self.gesture.phase != 'visible':
@@ -253,21 +265,42 @@ class Orbit(Gtk.Application):
         index = self.hit(x, y)
         if self.gesture_mode:
             if index < 0 or not self.gesture.drop():
+                self.close_panel()
                 return False
             self.window.set_visible(False)
         self.start(index)
         return bool(self.options)
 
+    def drag_leave(self, *_):
+        self.motion(None, -1, -1)
+        self.drag_serial += 1
+        # Layer input-region changes can generate a transient leave/enter pair.
+        # A generation token prevents that leave from closing a newer drag.
+        if self.gesture_mode:
+            GLib.timeout_add(250, self.expire_drag, self.gesture.generation, self.drag_serial)
+
+    def expire_drag(self, generation, serial):
+        if (self.gesture_mode and generation == self.gesture.generation
+                and serial == self.drag_serial and self.gesture.phase == 'visible'):
+            self.close_panel()
+        return False
+
     def drag_motion(self, _, x, y):
+        self.drag_serial += 1
         self.motion(None, x, y)
-        return Gdk.DragAction.COPY if not self.busy else Gdk.DragAction(0)
+        accepted = not self.busy and (not self.gesture_mode or self.gesture.phase == 'probe' or self.hover >= 0)
+        return Gdk.DragAction.COPY if accepted else Gdk.DragAction(0)
 
     def hit(self, x, y):
         dx, dy = x - CENTER, y - CENTER
-        if not self.options or not 87 < math.hypot(dx, dy) < 195:
+        if not self.options or not 91 < math.hypot(dx, dy) < 191:
             return -1
         step = math.tau / len(self.options)
-        return int(((math.atan2(dy, dx) + math.pi / 2 + step / 2) % math.tau) / step)
+        angle = (math.atan2(dy, dx) + math.pi / 2 + step / 2) % math.tau
+        # Match the visible gutter; dropping between formats must not choose one.
+        if angle % step < .025 or angle % step > step - .025:
+            return -1
+        return int(angle / step)
 
     def motion(self, _, x, y):
         self.hover = self.hit(x, y)
@@ -329,12 +362,15 @@ class Orbit(Gtk.Application):
             mid = -math.pi / 2 + i * step
             a, b = mid - step / 2 + .025, mid + step / 2 - .025
             cr.new_path()
-            cr.arc(CENTER, CENTER, 195, a, b)
-            cr.arc_negative(CENTER, CENTER, 87, b, a)
+            cr.arc(CENTER, CENTER, 191, a, b)
+            cr.arc_negative(CENTER, CENTER, 91, b, a)
             cr.close_path()
             active = i == self.hover and bool(self.options) and not self.busy
             cr.set_source_rgb(*((.64, .84, .66) if active else (.15, .19, .25)))
             cr.fill_preserve()
+            cr.set_line_join(cairo.LINE_JOIN_ROUND)
+            cr.set_line_width(7)
+            cr.stroke_preserve()
             cr.set_source_rgba(.65, .78, .89, .18)
             cr.set_line_width(1)
             cr.stroke()
@@ -342,8 +378,14 @@ class Orbit(Gtk.Application):
         cr.arc(CENTER, CENTER, 76, 0, math.tau)
         cr.set_source_rgb(.10, .13, .17)
         cr.fill()
-        self.text(cr, 'Converting' if self.busy else ('ORBIT' if not self.paths else f'{len(self.paths)} FILE' + ('S' if len(self.paths) > 1 else '')), CENTER, CENTER - 7, 17, (.65, .85, .67))
-        self.text(cr, 'Please wait' if self.busy else ('Drop here' if not self.paths else 'Pick a format'), CENTER, CENTER + 20, 12, (.6, .67, .75))
+        heading = 'Converting' if self.busy else ('ORBIT' if not self.paths else f'{len(self.paths)} FILE' + ('S' if len(self.paths) > 1 else ''))
+        self.text(cr, heading, CENTER, CENTER - 21, 15, (.65, .85, .67))
+        name = self.paths[0].name if len(self.paths) == 1 else ('Local conversion' if not self.paths else 'Batch conversion')
+        if len(name) > 19:
+            name = name[:11] + '…' + name[-7:]
+        self.text(cr, name, CENTER, CENTER + 2, 11, (.82, .87, .92))
+        instruction = 'Please wait' if self.busy else (f'To {self.options[self.hover]}' if self.hover >= 0 and self.options else 'Pick a format' if self.paths else 'Drop files')
+        self.text(cr, instruction, CENTER, CENTER + 24, 12, (.6, .67, .75))
 
     @staticmethod
     def text(cr, text, x, y, size, color):
