@@ -1,0 +1,61 @@
+#!/usr/bin/python
+"""Install non-consuming Shift bindings and a user-session daemon on Omarchy."""
+import json
+from pathlib import Path
+import subprocess
+import time
+
+home = Path.home()
+root = Path(__file__).resolve().parent.parent
+subprocess.run([str(root / 'scripts/install')], check=True)
+bindings = home / '.config/hypr/bindings.lua'
+if not bindings.exists():
+    raise SystemExit('Expected Omarchy Lua config at ~/.config/hypr/bindings.lua')
+start, end = '-- BEGIN ORBIT SHIFT GESTURE', '-- END ORBIT SHIFT GESTURE'
+old = bindings.read_text()
+current = json.loads(subprocess.check_output(['hyprctl', 'binds', '-j']))
+conflicts = [b for b in current if b.get('key', '').lower() in ('shift_l', 'shift_r') and not b.get('description', '').startswith('Orbit gesture')]
+if conflicts:
+    raise SystemExit('Existing Shift-only bindings found; resolve them before installing Orbit gesture bindings.')
+lines = [start]
+for side, key in [('left', 'Shift_L'), ('right', 'Shift_R')]:
+    for state in ('down', 'up'):
+        options = 'non_consuming = true, ignore_mods = true, transparent = true'
+        if state == 'up':
+            options += ', release = true'
+        lines.append(f'o.bind("{key}", "Orbit gesture {side} {state}", "gapplication action dev.orbit.Converter shift-{side}-{state}", {{ {options} }})')
+lines.append(end)
+block = '\n'.join(lines)
+if start in old:
+    before, rest = old.split(start, 1)
+    _, after = rest.split(end, 1)
+    new = before + block + after
+else:
+    new = old.rstrip() + '\n\n' + block + '\n'
+if new != old:
+    bindings.with_name(bindings.name + f'.bak.orbit.{time.time_ns()}').write_text(old)
+    bindings.write_text(new)
+    subprocess.run(['hyprctl', 'reload'], check=True)
+    errors = subprocess.check_output(['hyprctl', 'configerrors'], text=True).strip()
+    if errors:
+        bindings.write_text(old)
+        subprocess.run(['hyprctl', 'reload'], check=True)
+        raise SystemExit('Restored previous config after validation failed:\n' + errors)
+service = home / '.config/systemd/user/orbit.service'
+service.parent.mkdir(parents=True, exist_ok=True)
+service.write_text(f'''[Unit]
+Description=Orbit Shift-drag file converter
+PartOf=graphical-session.target
+After=graphical-session-pre.target
+
+[Service]
+ExecStart="{home}/.local/bin/orbit" --daemon
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
+''')
+subprocess.run(['systemctl', '--user', 'daemon-reload'], check=True)
+subprocess.run(['systemctl', '--user', 'enable', '--now', 'orbit.service'], check=True)
+print('Installed Shift-drag integration. Hold either Shift after starting a file drag.')

@@ -1,0 +1,4 @@
+#!/bin/sh
+ORBIT_ROOT=$(CDPATH= cd -- "$(dirname -- "$(readlink -f -- "$0")")/.." && pwd) || exit 1
+cd "$ORBIT_ROOT" || exit 1
+exec /usr/bin/python -m orbit "$@"
