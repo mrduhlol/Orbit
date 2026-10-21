@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+ORBIT_ROOT=$(CDPATH= cd -- "$(dirname -- "$(readlink -f -- "$0")")/.." && pwd)
+exec /usr/bin/python "$ORBIT_ROOT/scripts/installer.py" --uninstall "$@"
