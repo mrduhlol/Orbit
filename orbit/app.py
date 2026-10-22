@@ -17,8 +17,14 @@ from gi.repository import Gtk, Gdk, Gio, GLib
 from .converter import common_formats, convert
 from .gesture import Gesture, placement
 
-SIZE = 420
-CENTER = 210
+SIZE = 300
+CENTER = SIZE // 2
+# All wheel geometry scales from the old 420 px design via one factor.
+SCALE = SIZE / 420
+R_OUT = round(191 * SCALE)      # outer radius of the format ring
+R_IN = round(91 * SCALE)        # inner radius of the format ring
+R_HUB = round(76 * SCALE)       # central hub disc
+R_INPUT = round(195 * SCALE)    # pointer-input disc, slightly beyond the ring
 
 class Orbit(Gtk.Application):
     def __init__(self):
@@ -121,8 +127,8 @@ class Orbit(Gtk.Application):
             surface.set_input_region(cairo.Region(cairo.RectangleInt(max(0, x - 32), max(0, y - 32), min(64, SIZE - max(0, x - 32)), min(64, SIZE - max(0, y - 32)))))
         else:
             region = cairo.Region()
-            for y in range(15, 406):
-                half = int(math.sqrt(max(0, 195 ** 2 - (y - CENTER) ** 2)))
+            for y in range(CENTER - R_INPUT, CENTER + R_INPUT + 1):
+                half = int(math.sqrt(max(0, R_INPUT ** 2 - (y - CENTER) ** 2)))
                 region.union(cairo.RectangleInt(CENTER - half, y, half * 2, 1))
             surface.set_input_region(region)
 
@@ -306,7 +312,7 @@ class Orbit(Gtk.Application):
 
     def hit(self, x, y):
         dx, dy = x - CENTER, y - CENTER
-        if not self.options or not 91 < math.hypot(dx, dy) < 191:
+        if not self.options or not R_IN < math.hypot(dx, dy) < R_OUT:
             return -1
         step = math.tau / len(self.options)
         angle = (math.atan2(dy, dx) + math.pi / 2 + step / 2) % math.tau
@@ -375,30 +381,30 @@ class Orbit(Gtk.Application):
             mid = -math.pi / 2 + i * step
             a, b = mid - step / 2 + .025, mid + step / 2 - .025
             cr.new_path()
-            cr.arc(CENTER, CENTER, 191, a, b)
-            cr.arc_negative(CENTER, CENTER, 91, b, a)
+            cr.arc(CENTER, CENTER, R_OUT, a, b)
+            cr.arc_negative(CENTER, CENTER, R_IN, b, a)
             cr.close_path()
             active = i == self.hover and bool(self.options) and not self.busy
             cr.set_source_rgb(*((.64, .84, .66) if active else (.15, .19, .25)))
             cr.fill_preserve()
             cr.set_line_join(cairo.LINE_JOIN_ROUND)
-            cr.set_line_width(7)
+            cr.set_line_width(5)
             cr.stroke_preserve()
             cr.set_source_rgba(.65, .78, .89, .18)
             cr.set_line_width(1)
             cr.stroke()
-            self.text(cr, label, CENTER + 141 * math.cos(mid), CENTER + 141 * math.sin(mid), 17, (.08, .13, .13) if active else (.85, .9, .95))
-        cr.arc(CENTER, CENTER, 76, 0, math.tau)
+            self.text(cr, label, CENTER + (R_IN + R_OUT) / 2 * math.cos(mid), CENTER + (R_IN + R_OUT) / 2 * math.sin(mid), 12, (.08, .13, .13) if active else (.85, .9, .95))
+        cr.arc(CENTER, CENTER, R_HUB, 0, math.tau)
         cr.set_source_rgb(.10, .13, .17)
         cr.fill()
         heading = 'Converting' if self.busy else ('ORBIT' if not self.paths else f'{len(self.paths)} FILE' + ('S' if len(self.paths) > 1 else ''))
-        self.text(cr, heading, CENTER, CENTER - 21, 15, (.65, .85, .67))
+        self.text(cr, heading, CENTER, CENTER - 15, 11, (.65, .85, .67))
         name = self.paths[0].name if len(self.paths) == 1 else ('Local conversion' if not self.paths else 'Batch conversion')
         if len(name) > 19:
             name = name[:11] + '…' + name[-7:]
-        self.text(cr, name, CENTER, CENTER + 2, 11, (.82, .87, .92))
+        self.text(cr, name, CENTER, CENTER + 1, 8, (.82, .87, .92))
         instruction = 'Please wait' if self.busy else (f'To {self.options[self.hover]}' if self.hover >= 0 and self.options else 'Pick a format' if self.paths else 'Drop files')
-        self.text(cr, instruction, CENTER, CENTER + 24, 12, (.6, .67, .75))
+        self.text(cr, instruction, CENTER, CENTER + 17, 9, (.6, .67, .75))
 
     @staticmethod
     def text(cr, text, x, y, size, color):
