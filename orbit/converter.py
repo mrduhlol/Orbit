@@ -88,7 +88,13 @@ def formats(path):
     if kind == 'audio':
         return list(AUDIO_TARGETS) if shutil.which('ffmpeg') else []
     if kind == 'video':
-        return list(VIDEO_TARGETS) if shutil.which('ffmpeg') else []
+        if not shutil.which('ffmpeg'):
+            return []
+        targets = list(VIDEO_TARGETS)
+        if shutil.which('ffprobe') and _has_audio_stream(path) is False:
+            # A video without an audio stream cannot be reduced to an audio file.
+            targets = [fmt for fmt in targets if fmt not in AUDIO_TARGETS]
+        return targets
     return []
 
 
@@ -245,6 +251,24 @@ def _normalize_target(target):
     return target
 
 
+def _has_audio_stream(path):
+    """True/False whether the media contains audio; None when unknown."""
+    if not shutil.which('ffprobe'):
+        return None
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'error', '-show_entries', 'stream=codec_type',
+             '-of', 'csv=p=0', str(path)],
+            capture_output=True, stdin=subprocess.DEVNULL, text=True,
+            encoding='utf-8', errors='replace', timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode:
+        return None
+    return 'audio' in result.stdout.split()
+
+
 def _check_target(target, allowed, source):
     if target not in allowed:
         raise ValueError(f'{target} is not supported for {source.name}')
@@ -322,6 +346,8 @@ def convert(path, target):
         _require_tool('pdftotext' if target == 'TXT' else 'pdftoppm')
     elif kind in {'audio', 'video'}:
         _require_tool('ffmpeg')
+        if kind == 'video' and target in AUDIO_TARGETS and _has_audio_stream(source) is False:
+            raise ValueError('This video has no audio to convert')
 
     try:
         workspace = tempfile.TemporaryDirectory(prefix='.orbit-', dir=source.parent)

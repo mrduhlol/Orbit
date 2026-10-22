@@ -298,6 +298,36 @@ class ConversionTests(unittest.TestCase):
         self.assertFalse((self.root / 'clip.mp3').exists())
         self.assertFalse(list(self.root.glob('.orbit-*')))
 
+    @unittest.skipUnless(FFMPEG, 'ffmpeg required')
+    def test_video_without_audio_offers_no_audio_targets(self):
+        video = self.root / 'silent-recording.mp4'
+        subprocess.run(
+            ['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=size=32x32:duration=0.1', str(video)],
+            check=True,
+        )
+        self.assertEqual(formats(video), ['MP4', 'WEBM'])
+
+        with self.assertRaises(ValueError) as caught:
+            convert(video, 'MP3')
+        self.assertIn('no audio', str(caught.exception))
+        self.assertFalse((self.root / 'silent-recording.mp3').exists())
+        self.assertFalse(list(self.root.glob('.orbit-*')))
+
+    @unittest.skipUnless(FFMPEG, 'ffmpeg required')
+    def test_video_with_audio_offers_full_targets_and_extracts_mp3(self):
+        video = self.root / 'clip-with-sound.mp4'
+        subprocess.run(
+            ['ffmpeg', '-v', 'error',
+             '-f', 'lavfi', '-i', 'color=size=32x32:duration=0.1',
+             '-f', 'lavfi', '-i', 'sine=frequency=440:duration=0.1',
+             '-shortest', str(video)],
+            check=True,
+        )
+        self.assertEqual(formats(video), ['MP4', 'WEBM', 'MP3', 'WAV'])
+        mp3 = convert(video, 'MP3')[0]
+        self.assertTrue(mp3.stat().st_size)
+        self.assertFalse(list(self.root.glob('.orbit-*')))
+
 
 if __name__ == '__main__':
     unittest.main()
