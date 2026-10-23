@@ -17,7 +17,7 @@ from gi.repository import Gtk, Gdk, Gio, GLib
 from .converter import common_formats, convert
 from .gesture import Gesture, placement
 
-SIZE = 300
+SIZE = 100
 CENTER = SIZE // 2
 # All wheel geometry scales from the old 420 px design via one factor.
 SCALE = SIZE / 420

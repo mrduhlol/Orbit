@@ -35,9 +35,9 @@ class GestureTests(unittest.TestCase):
     def test_scaled_negative_and_rotated_monitors(self):
         monitors = [dict(name='left', x=-1536, y=0, width=1920, height=1080, scale=1.25),
                     dict(name='portrait', x=0, y=0, width=1920, height=1080, scale=1, transform=1)]
-        self.assertEqual(placement(dict(x=-1000, y=400), monitors), ('left', 386, 250, 150, 150))
-        self.assertEqual(placement(dict(x=-10, y=850), monitors), ('left', 1236, 564, 290, 286))
-        self.assertEqual(placement(dict(x=1000, y=1800), monitors), ('portrait', 780, 1620, 220, 180))
+        self.assertEqual(placement(dict(x=-1000, y=400), monitors), ('left', 486, 350, 50, 50))
+        self.assertEqual(placement(dict(x=-10, y=850), monitors), ('left', 1436, 764, 90, 86))
+        self.assertEqual(placement(dict(x=1000, y=1800), monitors), ('portrait', 950, 1750, 50, 50))
         with self.assertRaises(ValueError):
             placement(dict(x=99999, y=0), monitors)
 

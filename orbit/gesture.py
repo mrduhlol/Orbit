@@ -40,7 +40,7 @@ class Gesture:
         return False
 
 
-def placement(cursor, monitors, size=300):
+def placement(cursor, monitors, size=100):
     """hyprctl coordinates are logical; account for scale and rotated outputs."""
     for m in monitors:
         width, height = m['width'], m['height']

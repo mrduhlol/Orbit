@@ -40,14 +40,14 @@ class UITests(unittest.TestCase):
 
     def test_center_drop_dismisses_without_converting(self):
         value = self.Gdk.FileList.new_from_array([self.Gio.File.new_for_path(str(self.path))])
-        self.assertFalse(self.app.dropped(None, value, 150, 150))
+        self.assertFalse(self.app.dropped(None, value, 50, 50))
         self.assertEqual(self.app.gesture.phase, 'idle')
         self.assertFalse(self.app.busy)
 
     def test_drag_leave_expires_only_current_drag(self):
         app = self.app
         generation, serial = app.gesture.generation, app.drag_serial
-        app.drag_motion(None, 150, 50)
+        app.drag_motion(None, 50, 25)
         app.expire_drag(generation, serial)
         self.assertEqual(app.gesture.phase, 'visible')
         app.expire_drag(generation, app.drag_serial)
@@ -64,18 +64,17 @@ class UITests(unittest.TestCase):
     def test_probe_accepts_offer_before_preload(self):
         self.app.gesture.phase = 'probe'
         self.app.options = []
-        self.assertEqual(self.app.drag_motion(None, 150, 150), self.Gdk.DragAction.COPY)
+        self.assertEqual(self.app.drag_motion(None, 50, 50), self.Gdk.DragAction.COPY)
 
     def test_wheel_is_more_compact(self):
         from orbit.app import SIZE
         hub = SIZE // 2
-        self.assertEqual(SIZE, 300)
-        self.assertEqual(self.app.window.get_default_size(), (300, 300))
-        # The first segment is still reachable from the new hub.
-        self.assertEqual(self.app.hit(hub, hub - 100), 0)
-        # A point 152 px from the hub used to sit inside the old outer ring;
-        # it must now fall outside the wheel entirely.
-        self.assertEqual(self.app.hit(hub, hub - 152), -1)
+        self.assertEqual(SIZE, 100)
+        self.assertEqual(self.app.window.get_default_size(), (100, 100))
+        # A point inside the ring is still a selectable segment.
+        self.assertEqual(self.app.hit(hub, hub - 30), 0)
+        # A point beyond the outer radius is outside the wheel entirely.
+        self.assertEqual(self.app.hit(hub, hub - 50), -1)
 
     def test_mixed_remote_selection_is_rejected_as_a_whole(self):
         value = self.Gdk.FileList.new_from_array([self.Gio.File.new_for_path(str(self.path)), self.Gio.File.new_for_uri('sftp://example.com/file.png')])
@@ -92,19 +91,19 @@ class UITests(unittest.TestCase):
 
     def test_hit_and_drag_feedback(self):
         app = self.app
-        self.assertEqual(app.hit(150, 50), 0)
-        self.assertEqual(app.hit(150, 150), -1)
-        self.assertEqual(app.drag_motion(None, 150, 150), self.Gdk.DragAction(0))
-        self.assertEqual(app.drag_motion(None, 150, 50), self.Gdk.DragAction.COPY)
+        self.assertEqual(app.hit(50, 25), 0)
+        self.assertEqual(app.hit(50, 50), -1)
+        self.assertEqual(app.drag_motion(None, 50, 50), self.Gdk.DragAction(0))
+        self.assertEqual(app.drag_motion(None, 50, 25), self.Gdk.DragAction.COPY)
         app.busy = True
-        self.assertEqual(app.drag_motion(None, 150, 50), self.Gdk.DragAction(0))
+        self.assertEqual(app.drag_motion(None, 50, 25), self.Gdk.DragAction(0))
 
     def test_draw_with_filename_and_hover(self):
         import cairo
         app = self.app
         app.hover = 0
-        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 300, 300)
-        app.draw(None, cairo.Context(surface), 300, 300)
+        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 100, 100)
+        app.draw(None, cairo.Context(surface), 100, 100)
         self.assertTrue(any(surface.get_data()))
 
 if __name__ == '__main__':
