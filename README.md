@@ -2,17 +2,19 @@
 
 A native radial file converter for Omarchy / Hyprland, inspired by the supplied drag-to-convert reference. GTK 4 and Wayland layer shell; conversions run locally.
 
-## Run
+## Installation
 
-On Arch / Omarchy, dependencies are `python`, `python-gobject`, `python-cairo`, `python-pillow`, `gtk4`, `gtk4-layer-shell`, `ffmpeg`, and `poppler`.
+Requirements: on Arch / Omarchy, dependencies are `python`, `python-gobject`, `python-cairo`, `python-pillow`, `gtk4`, `gtk4-layer-shell`, `ffmpeg`, and `poppler`.
 
 ```sh
-./scripts/orbit
-# Install launcher, Shift bindings, and background session service
-./scripts/install-gesture
+git clone https://github.com/mrduhlol/Orbit.git && cd Orbit
+./scripts/orbit            # run the converter from source
+./scripts/install-gesture  # install launcher, Shift bindings, and background service
 ```
 
-Open Orbit, then drag files onto a format segment to convert. Drop in the center to select files first, or use **Choose files**. Format buttons below the wheel support keyboard navigation. Escape closes the panel while idle. Output copies appear next to their source; existing names receive numbered suffixes. **Open output folder** opens the last output's directory.
+`./scripts/install-gesture` installs the launcher and the managed `orbit.service` user unit plus the Shift-drag bindings in `~/.config/hypr/bindings.lua` (backing up the file first). Start the service from your graphical session with `systemctl --user start orbit.service`.
+
+Run the installed app with `orbit`, or start it directly with `./scripts/orbit`. Then open Orbit and drag files onto a format segment to convert.
 
 ## Shift-drag gesture
 
@@ -20,6 +22,8 @@ Open Orbit, then drag files onto a format segment to convert. Drop in the center
 2. Hold either **Shift** key while continuing the drag. The wheel appears near the pointer when the source provides a supported file list.
 3. Keep Shift held and drop onto a format. The wheel disappears, conversion runs in the background, and a desktop notification reports the result.
 4. Release Shift before dropping to dismiss the wheel. This cancels Orbit only; the original file-manager drag is still active.
+
+Drop in the center to select files first, or use **Choose files**. Format buttons below the wheel support keyboard navigation. Escape closes the panel while idle. Output copies appear next to their source; existing names receive numbered suffixes. **Open output folder** opens the last output's directory.
 
 The wheel stays fixed after appearing so you can target its segments. Placement is clamped to the monitor edges and accounts for scaling and rotation. Ordinary Shift presses show no visible popup. A transparent 64×64 pointer target probes for a file drag for up to 800 ms; it never takes keyboard focus, but can briefly intercept pointer input inside that small area. If a fast drag misses the probe, release and press Shift again while pausing the pointer. Starting the drag *after* holding Shift is not supported. Text, unsupported formats, and non-local URI drops do not reveal the wheel.
 
